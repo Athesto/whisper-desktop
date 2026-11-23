@@ -1,0 +1,12 @@
+[project]
+name = "whisper-desktop"
+version = "0.1.0"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "av<19", # faster-whisper 1.2.1 uses av.open(metadata_errors=...).
+    "faster-whisper>=1.2,<2",
+    "pywebview>=6,<7",
+]
+
+[dependency-groups]
+build = ["pyinstaller>=6.20,<7"]
