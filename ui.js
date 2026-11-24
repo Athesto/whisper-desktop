@@ -5,6 +5,7 @@ const model = document.querySelector('#model');
 const language = document.querySelector('#language');
 const statusText = document.querySelector('#status');
 const progress = document.querySelector('#progress');
+const appVersion = document.querySelector('#app-version');
 let api;
 let filename;
 let phase = 'idle';
@@ -26,6 +27,10 @@ function showMessage(message, error = false) {
 
 function render(state) {
   phase = state.phase;
+  if (state.version && appVersion.hidden) {
+    appVersion.textContent = "v" + state.version;
+    appVersion.hidden = false;
+  }
   showMessage(state.message, phase === 'error');
   progress.hidden = phase !== 'running';
   if (state.progress === null) progress.removeAttribute('value');

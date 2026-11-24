@@ -9,7 +9,7 @@ from faster_whisper.vad import get_vad_model
 
 def check_bundle():
     root = Path(__file__).parent
-    for resource in ("index.html", "ui.js", "assets/whisper.svg", "assets/whisper.ico"):
+    for resource in ("index.html", "ui.js", "pyproject.toml", "assets/whisper.svg", "assets/whisper.ico"):
         if not (root / resource).is_file():
             raise FileNotFoundError(resource)
     if not (Path(webview.__file__).parent / "js" / "api.js").is_file():

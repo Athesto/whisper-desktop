@@ -38,7 +38,7 @@ function Build-Executable {
             '--name', 'Whisper-Desktop', '--specpath', 'build',
             '--icon', '../assets/whisper.ico',
             '--add-data', '../index.html:.', '--add-data', '../ui.js:.',
-            '--add-data', '../assets:assets', '--collect-data', 'webview',
+            '--add-data', '../assets:assets', '--add-data', '../pyproject.toml:.', '--collect-data', 'webview',
             '--collect-all', 'faster_whisper', '--collect-all', 'ctranslate2', 'app.py'
         )
         uv @buildArguments

@@ -65,7 +65,7 @@ cmd_build() {
     UV_PROJECT_ENVIRONMENT=.venv-build MSYS2_ARG_CONV_EXCL="*" uv run --locked --python 3.13 --group build pyinstaller \
         --noconfirm --onefile --windowed --noupx \
         --name Whisper-Desktop --specpath build --icon '../assets/whisper.ico' \
-        --add-data '../index.html:.' --add-data '../ui.js:.' --add-data '../assets:assets' \
+        --add-data '../index.html:.' --add-data '../ui.js:.' --add-data '../assets:assets' --add-data '../pyproject.toml:.' \
         --collect-data webview --collect-all faster_whisper \
         --collect-all ctranslate2 app.py
 }

@@ -1,3 +1,4 @@
+import tomllib
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from threading import Lock, Thread
@@ -27,9 +28,17 @@ def write_srt(path, subtitles):
             temporary.unlink(missing_ok=True)
 
 
+def dialog_path(selection):
+    if not selection:
+        return None
+    return Path(selection if isinstance(selection, str) else selection[0])
+
+
 class Desktop:
     def __init__(self, webview):
         self._webview = webview
+        with Path(__file__).with_name("pyproject.toml").open("rb") as manifest:
+            self._version = tomllib.load(manifest)["project"]["version"]
         self._window = None
         self._lock = Lock()
         self._source = None
@@ -42,23 +51,24 @@ class Desktop:
         with self._lock:
             if self._state["phase"] == "running":
                 return None
-        files = self._window.create_file_dialog(
+        selection = self._window.create_file_dialog(
             self._webview.FileDialog.OPEN,
             file_types=("Videos (*.mp4;*.mkv;*.mov;*.avi;*.webm;*.m4v;*.wmv;*.mpeg;*.mpg;*.ts)", "Todos los archivos (*.*)"),
         )
-        if not files:
+        path = dialog_path(selection)
+        if path is None:
             return None
         with self._lock:
             if self._state["phase"] == "running":
                 return None
-            self._source = Path(files[0])
+            self._source = path
             self._subtitles = []
             self._state = {"phase": "idle", "message": "Listo para transcribir.", "progress": 0}
             return self._source.name
 
     def status(self):
         with self._lock:
-            return self._state.copy()
+            return {**self._state, "version": self._version}
 
     def start(self, model, language):
         if model not in ("tiny", "base", "small") or language not in ("auto", "es", "en", "pt", "fr"):
@@ -114,15 +124,17 @@ class Desktop:
                 return None
             subtitles = self._subtitles
             source = self._source
-        files = self._window.create_file_dialog(
+        selection = self._window.create_file_dialog(
             self._webview.FileDialog.SAVE,
             directory=str(source.parent),
             save_filename=source.with_suffix(".srt").name,
             file_types=("Subtítulos SRT (*.srt)",),
         )
-        if not files:
+        path = dialog_path(selection)
+        if path is None:
             return None
-        path = Path(files[0])
+        if not path.name:
+            return {"error": "Elige un nombre de archivo para guardar los subtítulos."}
         if path.suffix.lower() != ".srt":
             new_path = path.with_name(path.name + ".srt")
             if new_path.exists() and not self._window.create_confirmation_dialog(

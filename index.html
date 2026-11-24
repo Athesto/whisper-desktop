@@ -33,7 +33,10 @@
     [hidden] { display: none; }
     #status { overflow-wrap: anywhere; }
     #status[data-error="true"] { color: #ffb4ae; }
-    footer { margin-top: 16px; font-size: .85rem; }
+    footer { display: grid; gap: 6px; margin-top: 16px; font-size: .85rem; }
+    .footer-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; color: #b2b6c5; }
+    .footer-meta a { color: #b6b0ff; }
+    #app-version { margin-left: auto; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -75,7 +78,14 @@
         <p id="status" role="status">Conectando con la aplicación…</p>
       </div>
     </section>
-    <footer><p>El audio se procesa en tu equipo. El primer uso de cada modelo requiere internet para descargarlo.</p></footer>
+    <footer>
+      <p>El audio se procesa en tu equipo. El primer uso de cada modelo requiere internet para descargarlo.</p>
+      <div class="footer-meta">
+        <a href="https://athesto.github.io/whisper-desktop/" target="_blank" rel="noopener noreferrer">Página del proyecto</a>
+        <a href="https://github.com/Athesto/whisper-desktop" target="_blank" rel="noopener noreferrer">Repositorio</a>
+        <span id="app-version" hidden></span>
+      </div>
+    </footer>
   </main>
   <script src="ui.js"></script>
 </body>
