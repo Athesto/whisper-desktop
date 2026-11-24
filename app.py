@@ -143,7 +143,7 @@ def main():
     desktop = Desktop(webview)
     desktop._window = webview.create_window(
         "Whisper · Subtítulos", url=str(Path(__file__).with_name("index.html").resolve()),
-        js_api=desktop, width=820, height=730, min_size=(480, 570),
+        js_api=desktop, width=820, height=730, resizable=False, zoomable=False,
         background_color="#111318", confirm_close=True,
     )
     webview.start(icon=str(Path(__file__).with_name("assets") / "whisper.ico"))

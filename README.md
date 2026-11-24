@@ -19,14 +19,25 @@ La ventana usa Microsoft Edge WebView2. Si Windows no lo tiene instalado, instal
 
 ## Desarrollo y publicación
 
+Desde PowerShell en Windows, en la raíz del proyecto:
+
+    .\run.ps1 local py
+    .\run.ps1 local exe
+    .\run.ps1 version
+    .\run.ps1 doctor
+    .\run.ps1 build
+    .\run.ps1 publish
+
 Desde BusyBox en Windows, en la raíz del proyecto:
 
     busybox sh run.sh local
+    busybox sh run.sh doctor
     busybox sh run.sh build
     busybox sh run.sh publish
 
 También puedes usar sh run.sh desde Git Bash.
 
 - local abre la app desde el código fuente con uv y Python 3.13.
+- doctor comprueba uv, Python 3.13, WebView2 y las dependencias de ejecución. También prueba la decodificación y el detector de voz sin conexión. No instala dependencias ni descarga modelos.
 - build genera dist/Whisper-Desktop.exe con Python y las dependencias incluidas. El equipo que lo ejecuta necesita Microsoft Edge WebView2 y conexión a internet para la primera descarga de cada modelo.
 - publish requiere un repositorio GitHub configurado como origin. Actualiza project.version en pyproject.toml, sincroniza uv.lock con uv lock y haz commit de los cambios. El comando sube el tag v<versión> del commit actual. GitHub Actions compila en Windows, prueba el ejecutable y lo adjunta al Release.

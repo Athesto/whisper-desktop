@@ -15,6 +15,7 @@ Commands:
   build    Build dist/Whisper-Desktop.exe on Windows
   version  Print the version from pyproject.toml
   publish  Push the v<version> tag from pyproject.toml to origin
+  doctor  Check Python, runtime dependencies, and WebView2
   --help   Show this help
 EOF
 )
@@ -40,6 +41,20 @@ cmd_local() {
     printf '%s\n' 'Abriendo Whisper Desktop...' >&2
     uv run --locked --python 3.13 --no-dev app.py
 }
+
+cmd_doctor() {
+    if ! command -v uv >/dev/null 2>&1; then
+        printf '%s\n' '[ERROR] uv no está instalado o no está en PATH.' >&2
+        return 1
+    fi
+    uv --version
+    if ! doctor_python=$(uv python find --no-project --no-python-downloads 3.13); then
+        printf '%s\n' '[ERROR] Falta Python 3.13. Instálalo con uv python install 3.13.' >&2
+        return 1
+    fi
+    "$doctor_python" -u doctor.py
+}
+
 
 cmd_build() {
     case "${OS:-}" in
