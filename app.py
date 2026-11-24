@@ -1,3 +1,4 @@
+import json
 import tomllib
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -12,7 +13,14 @@ def timestamp(seconds):
     return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
 
 
-def write_srt(path, subtitles):
+def format_srt(subtitles):
+    return "".join(
+        f"{index}\n{timestamp(start)} --> {timestamp(end)}\n{line}\n\n"
+        for index, (start, end, line) in enumerate(subtitles, 1)
+    )
+
+
+def write_text(path, content, *, replace):
     temporary = None
     try:
         with NamedTemporaryFile(
@@ -20,18 +28,35 @@ def write_srt(path, subtitles):
             dir=path.parent, delete=False,
         ) as output:
             temporary = Path(output.name)
-            for index, (start, end, line) in enumerate(subtitles, 1):
-                output.write(f"{index}\n{timestamp(start)} --> {timestamp(end)}\n{line}\n\n")
-        temporary.replace(path)
+            output.write(content)
+        if not replace:
+            path.touch(exist_ok=False)
+        try:
+            temporary.replace(path)
+        except OSError:
+            if not replace:
+                path.unlink(missing_ok=True)
+            raise
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
 
 
-def dialog_path(selection):
+def dialog_paths(selection):
     if not selection:
-        return None
-    return Path(selection if isinstance(selection, str) else selection[0])
+        return ()
+    names = (selection,) if isinstance(selection, str) else selection
+    return tuple(dict.fromkeys(Path(name) for name in names))
+
+
+def batch_destinations(directory, source, formats):
+    number = 1
+    while True:
+        stem = source.stem if number == 1 else f"{source.stem} ({number})"
+        paths = [directory / f"{stem}.{extension}" for extension in formats]
+        if not any(path.exists() for path in paths):
+            return paths
+        number += 1
 
 
 class Desktop:
@@ -41,98 +66,193 @@ class Desktop:
             self._version = tomllib.load(manifest)["project"]["version"]
         self._window = None
         self._lock = Lock()
-        self._source = None
+        self._sources = ()
         self._subtitles = []
+        self._results = []
         self._model = None
         self._model_name = None
-        self._state = {"phase": "idle", "message": "Selecciona un video.", "progress": 0}
+        self._state = {"phase": "idle", "message": "Selecciona archivos de video o audio.", "progress": 0}
 
-    def choose_video(self):
+    def choose_files(self):
         with self._lock:
             if self._state["phase"] == "running":
                 return None
         selection = self._window.create_file_dialog(
             self._webview.FileDialog.OPEN,
-            file_types=("Videos (*.mp4;*.mkv;*.mov;*.avi;*.webm;*.m4v;*.wmv;*.mpeg;*.mpg;*.ts)", "Todos los archivos (*.*)"),
+            allow_multiple=True,
+            file_types=(
+                "Video y audio (*.mp4;*.mkv;*.mov;*.avi;*.webm;*.m4v;*.wmv;*.mpeg;*.mpg;*.ts;*.mp3;*.m4a;*.wav;*.flac;*.aac;*.ogg;*.opus;*.wma)",
+                "Todos los archivos (*.*)",
+            ),
         )
-        path = dialog_path(selection)
-        if path is None:
+        paths = dialog_paths(selection)
+        if not paths:
             return None
         with self._lock:
             if self._state["phase"] == "running":
                 return None
-            self._source = path
+            self._sources = paths
+            self._results = []
             self._subtitles = []
             self._state = {"phase": "idle", "message": "Listo para transcribir.", "progress": 0}
-            return self._source.name
+            return [path.name for path in paths]
 
     def status(self):
         with self._lock:
-            return {**self._state, "version": self._version}
+            return {**self._state, "version": self._version, "results": self._results.copy()}
 
-    def start(self, model, language):
+    def start(self, model, language, output_format="srt"):
         if model not in ("tiny", "base", "small") or language not in ("auto", "es", "en", "pt", "fr"):
             raise ValueError("Modelo o idioma inválido.")
+        formats = {"srt": ("srt",), "json": ("json",), "both": ("srt", "json")}
+        if output_format not in formats:
+            raise ValueError("Formato de salida inválido.")
         with self._lock:
-            if self._source is None or self._state["phase"] == "running":
+            sources = self._sources
+            if not sources or self._state["phase"] == "running":
+                return False
+
+        directory = None
+        if len(sources) > 1:
+            selection = self._window.create_file_dialog(
+                self._webview.FileDialog.FOLDER, directory=str(sources[0].parent),
+            )
+            directories = dialog_paths(selection)
+            if not directories:
+                return False
+            directory = directories[0]
+
+        with self._lock:
+            if self._sources is not sources or self._state["phase"] == "running":
                 return False
             self._subtitles = []
+            self._results = []
             self._state = {"phase": "running", "message": "Cargando modelo de Whisper…", "progress": None}
-            Thread(target=self._transcribe, args=(self._source, model, language), daemon=True).start()
+            Thread(
+                target=self._transcribe, args=(sources, model, language, directory, formats[output_format]),
+                daemon=True,
+            ).start()
             return True
 
-    def _transcribe(self, source, model, language):
-        try:
-            from faster_whisper import WhisperModel
+    def _read_segments(self, source, language, on_progress):
+        segments, info = self._model.transcribe(
+            str(source), language=None if language == "auto" else language, vad_filter=True,
+        )
+        subtitles = []
+        for segment in segments:
+            line = " ".join(segment.text.split())
+            if line:
+                subtitles.append((segment.start, segment.end, line))
+            ratio = min(1, segment.end / info.duration) if info.duration > 0 else 0
+            on_progress(len(subtitles), ratio)
+        return subtitles, info.language
 
+    def _transcribe(self, sources, model, language, directory, formats):
+        try:
             if self._model_name != model:
+                from faster_whisper import WhisperModel
+
                 self._model = None
                 self._model_name = None
                 self._model = WhisperModel(model, device="cpu", compute_type="int8")
                 self._model_name = model
-            with self._lock:
-                self._state["message"] = "Analizando el audio…"
-            segments, info = self._model.transcribe(
-                str(source), language=None if language == "auto" else language, vad_filter=True,
-            )
-            subtitles = []
-            for segment in segments:
-                line = " ".join(segment.text.split())
-                if line:
-                    subtitles.append((segment.start, segment.end, line))
-                with self._lock:
-                    self._state["message"] = f"Transcribiendo · {len(subtitles)} segmentos"
-                    if info.duration > 0:
-                        self._state["progress"] = min(99, round(100 * segment.end / info.duration))
-            with self._lock:
-                self._subtitles = subtitles
-                self._state = {
-                    "phase": "done" if subtitles else "empty",
-                    "message": (
-                        f"{len(subtitles)} segmentos · Idioma: {info.language}"
-                        if subtitles else "Whisper no detectó voz en el video."
-                    ),
-                    "progress": 100,
-                }
+
+            if directory is None:
+                self._transcribe_single(sources[0], language)
+            else:
+                self._transcribe_batch(sources, model, language, directory, formats)
         except Exception as error:
             with self._lock:
                 self._state = {"phase": "error", "message": f"No se pudo transcribir. {error}", "progress": 0}
+
+    def _transcribe_single(self, source, language):
+        with self._lock:
+            self._state["message"] = "Analizando el audio…"
+
+        def progress(count, ratio):
+            with self._lock:
+                self._state["message"] = f"Transcribiendo · {count} segmentos"
+                self._state["progress"] = min(99, round(100 * ratio))
+
+        subtitles, detected_language = self._read_segments(source, language, progress)
+        with self._lock:
+            self._subtitles = subtitles
+            self._state = {
+                "phase": "done" if subtitles else "empty",
+                "message": (
+                    f"{len(subtitles)} segmentos · Idioma: {detected_language}"
+                    if subtitles else "Whisper no detectó voz en el archivo."
+                ),
+                "progress": 100,
+            }
+
+    def _transcribe_batch(self, sources, model, language, directory, formats):
+        total = len(sources)
+        exported = 0
+        failed = 0
+        for index, source in enumerate(sources):
+            label = f"{index + 1} de {total} · {source.name}"
+
+            def progress(count, ratio):
+                with self._lock:
+                    self._state["message"] = f"{label} · {count} segmentos"
+                    self._state["progress"] = min(99, round(100 * (index + ratio) / total))
+
+            with self._lock:
+                self._state["message"] = label
+                self._state["progress"] = round(100 * index / total)
+
+            saved = []
+            try:
+                subtitles, detected_language = self._read_segments(source, language, progress)
+                if subtitles:
+                    for path in batch_destinations(directory, source, formats):
+                        if path.suffix == ".srt":
+                            content = format_srt(subtitles)
+                        else:
+                            content = json.dumps(
+                                {
+                                    "source": source.name, "model": model, "language": detected_language,
+                                    "segments": [{"start": a, "end": b, "text": line} for a, b, line in subtitles],
+                                },
+                                ensure_ascii=False, indent=2,
+                            ) + "\n"
+                        write_text(path, content, replace=False)
+                        saved.append(path.name)
+                    exported += 1
+                result = {"name": source.name, "message": ", ".join(saved) or "Sin voz detectada", "error": False}
+            except Exception as error:
+                failed += 1
+                existing = f"Guardado: {', '.join(saved)}. " if saved else ""
+                result = {"name": source.name, "message": f"{existing}{error}", "error": True}
+            with self._lock:
+                self._results.append(result)
+
+        skipped = total - exported - failed
+        with self._lock:
+            self._state = {
+                "phase": "batch_done",
+                "message": f"Lote terminado · {exported} exportados · {skipped} sin voz · {failed} con error",
+                "progress": 100,
+            }
+
 
     def save(self):
         with self._lock:
             if self._state["phase"] != "done":
                 return None
             subtitles = self._subtitles
-            source = self._source
+            source = self._sources[0]
         selection = self._window.create_file_dialog(
             self._webview.FileDialog.SAVE,
             directory=str(source.parent),
             save_filename=source.with_suffix(".srt").name,
             file_types=("Subtítulos SRT (*.srt)",),
         )
-        path = dialog_path(selection)
-        if path is None:
+        paths = dialog_paths(selection)
+        if not paths:
             return None
+        path = paths[0]
         if not path.name:
             return {"error": "Elige un nombre de archivo para guardar los subtítulos."}
         if path.suffix.lower() != ".srt":
@@ -143,7 +263,7 @@ class Desktop:
                 return None
             path = new_path
         try:
-            write_srt(path, subtitles)
+            write_text(path, format_srt(subtitles), replace=True)
         except OSError as error:
             return {"error": f"No se pudo guardar el archivo. {error}"}
         return {"name": path.name}

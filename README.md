@@ -12,10 +12,12 @@ uv run --python 3.13 app.py
 
 La ventana usa Microsoft Edge WebView2. Si Windows no lo tiene instalado, instala el runtime de WebView2. faster-whisper incluye la decodificación de audio mediante PyAV.
 
-1. Pulsa **Elegir video**.
+1. Pulsa **Elegir archivos** y selecciona un video o audio.
 2. Elige el modelo y el idioma del audio, o deja la detección automática.
 3. Pulsa **Transcribir** y espera a que termine.
 4. Pulsa **Exportar SRT** y elige dónde guardar los subtítulos.
+
+Para transcribir en lote, selecciona varios archivos, elige **SRT**, **JSON** o **SRT y JSON**, y pulsa **Transcribir lote…**. Elige la carpeta de destino. Los archivos se guardan conforme termina cada transcripción. La cola muestra los resultados y continúa si un archivo falla.
 
 ## Desarrollo y publicación
 

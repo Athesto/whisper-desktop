@@ -28,6 +28,9 @@
     button:hover:enabled { filter: brightness(1.13); }
     button:disabled, select:disabled { opacity: .48; cursor: default; }
     :focus-visible { outline: 2px solid #d5d1ff; outline-offset: 3px; }
+    .queue { max-height: 138px; overflow: auto; margin: 10px 0 0; padding-left: 22px; color: #b2b6c5; overflow-wrap: anywhere; }
+    .queue li { padding: 3px 0; }
+    .queue li[data-error="true"] { color: #ffb4ae; }
     .status { margin-top: 20px; }
     progress { width: 100%; accent-color: #bdb7ff; height: 8px; display: block; margin-bottom: 8px; }
     [hidden] { display: none; }
@@ -43,14 +46,15 @@
   <main>
     <header>
       <div class="brand"><img src="assets/whisper.svg" alt=""><strong>Whisper</strong></div>
-      <h1>Subtítulos para tus videos</h1>
-      <p>Abre un video, transcribe su audio y guarda los subtítulos en formato SRT.</p>
+      <h1>Subtítulos para video y audio</h1>
+      <p>Transcribe un archivo o procesa varios en lote con Whisper.</p>
     </header>
     <section class="panel" aria-label="Transcripción">
       <div class="file">
-        <div><strong>Video</strong><p id="filename">Ningún archivo seleccionado</p></div>
-        <button id="choose" disabled>Elegir video</button>
+        <div><strong>Archivos</strong><p id="filename">Ningún archivo seleccionado</p></div>
+        <button id="choose" disabled>Elegir archivos</button>
       </div>
+      <ul class="queue" id="queue" aria-label="Archivos del lote" hidden></ul>
       <div class="fields">
         <label>Idioma del audio
           <select id="language">
@@ -66,6 +70,13 @@
             <option value="tiny">Tiny · rápido</option>
             <option value="base" selected>Base · equilibrado</option>
             <option value="small">Small · más preciso</option>
+          </select>
+        </label>
+        <label id="format-field" hidden>Formato del lote
+          <select id="format">
+            <option value="srt">SRT</option>
+            <option value="json">JSON</option>
+            <option value="both">SRT y JSON</option>
           </select>
         </label>
       </div>

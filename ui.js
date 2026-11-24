@@ -7,14 +7,24 @@ const statusText = document.querySelector('#status');
 const progress = document.querySelector('#progress');
 const appVersion = document.querySelector('#app-version');
 let api;
-let filename;
+const fileCount = document.querySelector('#filename');
+const queue = document.querySelector('#queue');
+const format = document.querySelector('#format');
+const formatField = document.querySelector('#format-field');
+let files = [];
+let renderedResults = -1;
 let phase = 'idle';
 let busy = false;
 
 function updateButtons() {
   const locked = busy || phase === 'running';
   choose.disabled = locked;
-  start.disabled = locked || !filename;
+  const batch = files.length > 1;
+  start.disabled = locked || !files.length;
+  start.textContent = batch ? 'Transcribir lote…' : 'Transcribir';
+  save.hidden = batch;
+  formatField.hidden = !batch;
+  format.disabled = locked;
   save.disabled = locked || phase !== 'done';
   model.disabled = locked;
   language.disabled = locked;
@@ -25,7 +35,21 @@ function showMessage(message, error = false) {
   statusText.dataset.error = error;
 }
 
+function renderQueue(results) {
+  if (renderedResults === results.length) return;
+  renderedResults = results.length;
+  queue.hidden = files.length < 2;
+  queue.replaceChildren(...files.map((name, index) => {
+    const item = document.createElement('li');
+    const result = results[index];
+    item.textContent = result ? name + ' · ' + result.message : name;
+    if (result?.error) item.dataset.error = 'true';
+    return item;
+  }));
+}
+
 function render(state) {
+  renderQueue(state.results ?? []);
   phase = state.phase;
   if (state.version && appVersion.hidden) {
     appVersion.textContent = "v" + state.version;
@@ -64,15 +88,16 @@ window.addEventListener('pywebviewready', () => {
   api = window.pywebview.api;
   run(async () => render(await api.status()));
   choose.addEventListener('click', () => run(async () => {
-    const selected = await api.choose_video();
+    const selected = await api.choose_files();
     if (selected) {
-      filename = selected;
-      document.querySelector('#filename').textContent = filename;
+      files = selected;
+      renderedResults = -1;
+      fileCount.textContent = files.length > 1 ? files.length + ' archivos seleccionados' : files[0];
       render(await api.status());
     }
   }));
   start.addEventListener('click', () => run(async () => {
-    if (await api.start(model.value, language.value)) {
+    if (await api.start(model.value, language.value, format.value)) {
       render({phase: 'running', message: 'Cargando modelo de Whisper…', progress: null});
       await poll();
     }
