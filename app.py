@@ -1,4 +1,6 @@
 import json
+import platform
+import sys
 import tomllib
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -59,18 +61,33 @@ def batch_destinations(directory, source, formats):
         number += 1
 
 
+def metal_available():
+    if sys.platform != "darwin" or platform.machine() != "arm64":
+        return False
+
+    try:
+        from ctranslate2 import get_supported_compute_types
+
+        return "float16" in get_supported_compute_types("mps")
+    except (ImportError, OSError, RuntimeError, ValueError):
+        return False
+
+
+
 class Desktop:
     def __init__(self, webview):
         self._webview = webview
         with Path(__file__).with_name("pyproject.toml").open("rb") as manifest:
             self._version = tomllib.load(manifest)["project"]["version"]
         self._window = None
+        self._metal_available = metal_available()
+        self._device = None
         self._lock = Lock()
         self._sources = ()
         self._subtitles = []
         self._results = []
         self._model = None
-        self._model_name = None
+        self._model_key = None
         self._state = {"phase": "idle", "message": "Selecciona archivos de video o audio.", "progress": 0}
 
     def choose_files(self):
@@ -92,6 +109,7 @@ class Desktop:
             if self._state["phase"] == "running":
                 return None
             self._sources = paths
+            self._device = None
             self._results = []
             self._subtitles = []
             self._state = {"phase": "idle", "message": "Listo para transcribir.", "progress": 0}
@@ -99,11 +117,17 @@ class Desktop:
 
     def status(self):
         with self._lock:
-            return {**self._state, "version": self._version, "results": self._results.copy()}
+            return {
+                **self._state, "version": self._version, "results": self._results.copy(),
+                "metal_available": self._metal_available, "device": self._device,
+            }
 
-    def start(self, model, language, output_format="srt"):
+    def start(self, model, language, output_format="srt", use_metal=False):
         if model not in ("tiny", "base", "small") or language not in ("auto", "es", "en", "pt", "fr"):
             raise ValueError("Modelo o idioma inválido.")
+        if use_metal and not self._metal_available:
+            raise ValueError("Metal no está disponible en este equipo.")
+        device = "mps" if use_metal else "cpu"
         formats = {"srt": ("srt",), "json": ("json",), "both": ("srt", "json")}
         if output_format not in formats:
             raise ValueError("Formato de salida inválido.")
@@ -127,9 +151,10 @@ class Desktop:
                 return False
             self._subtitles = []
             self._results = []
+            self._device = device
             self._state = {"phase": "running", "message": "Cargando modelo de Whisper…", "progress": None}
             Thread(
-                target=self._transcribe, args=(sources, model, language, directory, formats[output_format]),
+                target=self._transcribe, args=(sources, model, language, directory, formats[output_format], device),
                 daemon=True,
             ).start()
             return True
@@ -147,15 +172,17 @@ class Desktop:
             on_progress(len(subtitles), ratio)
         return subtitles, info.language
 
-    def _transcribe(self, sources, model, language, directory, formats):
+    def _transcribe(self, sources, model, language, directory, formats, device):
         try:
-            if self._model_name != model:
+            model_key = (model, device)
+            if self._model_key != model_key:
                 from faster_whisper import WhisperModel
 
                 self._model = None
-                self._model_name = None
-                self._model = WhisperModel(model, device="cpu", compute_type="int8")
-                self._model_name = model
+                self._model_key = None
+                compute_type = "float16" if device == "mps" else "int8"
+                self._model = WhisperModel(model, device=device, compute_type=compute_type)
+                self._model_key = model_key
 
             if directory is None:
                 self._transcribe_single(sources[0], language)
@@ -163,7 +190,10 @@ class Desktop:
                 self._transcribe_batch(sources, model, language, directory, formats)
         except Exception as error:
             with self._lock:
-                self._state = {"phase": "error", "message": f"No se pudo transcribir. {error}", "progress": 0}
+                message = f"No se pudo transcribir. {error}"
+                if device == "mps":
+                    message += " Desmarca el uso de Metal para reintentar con CPU."
+                self._state = {"phase": "error", "message": message, "progress": 0}
 
     def _transcribe_single(self, source, language):
         with self._lock:
@@ -229,10 +259,13 @@ class Desktop:
                 self._results.append(result)
 
         skipped = total - exported - failed
+        message = f"Lote terminado · {exported} exportados · {skipped} sin voz · {failed} con error"
+        if failed and self._device == "mps":
+            message += ". Puedes seleccionar los archivos fallidos y reintentar con CPU."
         with self._lock:
             self._state = {
                 "phase": "batch_done",
-                "message": f"Lote terminado · {exported} exportados · {skipped} sin voz · {failed} con error",
+                "message": message,
                 "progress": 100,
             }
 
@@ -282,8 +315,6 @@ def main():
 
 
 if __name__ == "__main__":
-    import sys
-
     if sys.argv[1:] == ["--smoke-test"]:
         from build_smoke import check_bundle
 

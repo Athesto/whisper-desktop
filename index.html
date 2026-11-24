@@ -31,6 +31,9 @@
     .queue { max-height: 138px; overflow: auto; margin: 10px 0 0; padding-left: 22px; color: #b2b6c5; overflow-wrap: anywhere; }
     .queue li { padding: 3px 0; }
     .queue li[data-error="true"] { color: #ffb4ae; }
+    .metal { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .metal small, #device { color: #b2b6c5; font-weight: normal; }
+    #device { margin-top: 4px; font-size: .85rem; }
     .status { margin-top: 20px; }
     progress { width: 100%; accent-color: #bdb7ff; height: 8px; display: block; margin-bottom: 8px; }
     [hidden] { display: none; }
@@ -79,6 +82,10 @@
             <option value="both">SRT y JSON</option>
           </select>
         </label>
+        <label class="metal" id="metal-field" hidden>
+          <input type="checkbox" id="metal" aria-describedby="metal-note">
+          Usar GPU del Mac (Metal) <small id="metal-note">Experimental</small>
+        </label>
       </div>
       <div class="actions">
         <button class="primary" id="start" disabled>Transcribir</button>
@@ -87,6 +94,7 @@
       <div class="status">
         <progress id="progress" max="100" aria-label="Progreso de transcripción" hidden></progress>
         <p id="status" role="status">Conectando con la aplicación…</p>
+        <p id="device" hidden></p>
       </div>
     </section>
     <footer>

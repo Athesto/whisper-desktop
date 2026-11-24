@@ -1,6 +1,6 @@
 # Whisper para escritorio
 
-Abre un video con pywebview y exporta sus subtítulos como un archivo `.srt` en UTF-8. La aplicación usa faster-whisper en CPU. El primer uso de cada modelo requiere internet para descargarlo. La transcripción se realiza en el equipo.
+Abre un video con pywebview y exporta sus subtítulos como un archivo `.srt` en UTF-8. La aplicación usa faster-whisper en CPU. El primer uso de cada modelo requiere internet para descargarlo. La transcripción se realiza en el equipo. En un Mac con Apple Silicon compatible puedes activar la opción experimental **Usar GPU del Mac (Metal)**. La app usa CPU por defecto.
 
 ## Ejecutar en Windows
 

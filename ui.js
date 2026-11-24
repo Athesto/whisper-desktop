@@ -11,6 +11,9 @@ const fileCount = document.querySelector('#filename');
 const queue = document.querySelector('#queue');
 const format = document.querySelector('#format');
 const formatField = document.querySelector('#format-field');
+const metalField = document.querySelector('#metal-field');
+const metal = document.querySelector('#metal');
+const device = document.querySelector('#device');
 let files = [];
 let renderedResults = -1;
 let phase = 'idle';
@@ -25,6 +28,7 @@ function updateButtons() {
   save.hidden = batch;
   formatField.hidden = !batch;
   format.disabled = locked;
+  metal.disabled = locked || metalField.hidden;
   save.disabled = locked || phase !== 'done';
   model.disabled = locked;
   language.disabled = locked;
@@ -51,6 +55,9 @@ function renderQueue(results) {
 function render(state) {
   renderQueue(state.results ?? []);
   phase = state.phase;
+  if (state.metal_available !== undefined) metalField.hidden = !state.metal_available;
+  device.hidden = !state.device;
+  device.textContent = state.device === 'mps' ? 'Dispositivo: GPU (Metal)' : 'Dispositivo: CPU';
   if (state.version && appVersion.hidden) {
     appVersion.textContent = "v" + state.version;
     appVersion.hidden = false;
@@ -97,8 +104,9 @@ window.addEventListener('pywebviewready', () => {
     }
   }));
   start.addEventListener('click', () => run(async () => {
-    if (await api.start(model.value, language.value, format.value)) {
-      render({phase: 'running', message: 'Cargando modelo de Whisper…', progress: null});
+    const useMetal = !metalField.hidden && metal.checked;
+    if (await api.start(model.value, language.value, format.value, useMetal)) {
+      render({phase: 'running', message: 'Cargando modelo de Whisper…', progress: null, device: useMetal ? 'mps' : 'cpu'});
       await poll();
     }
   }));
