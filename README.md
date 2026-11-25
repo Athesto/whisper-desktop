@@ -46,8 +46,9 @@ También puedes usar sh run.sh desde Git Bash.
 
 ## Registro de cambios
 
-Cada tag de versión genera las notas del Release a partir de sus commits y adjunta el historial completo como CHANGELOG.md. Para previsualizar el historial, incluidos los cambios sin publicar:
+Cada tag de versión genera las notas del Release a partir de sus commits y adjunta el historial completo como CHANGELOG.md. Para generar CHANGELOG.md en la raíz del proyecto, incluidos los cambios sin publicar:
 
-    uv run --no-sync --python 3.13 python scripts/changelog.py
+    .\run.ps1 changelog
+    sh run.sh changelog
 
 Los mensajes feat: y fix: se agrupan en Añadido y Corregido. Los commits internos con prefijos como ci: o chore: aparecen en los detalles del Release.

@@ -84,6 +84,7 @@ Commands:
   version  Print the version from pyproject.toml
   publish  Push the v<version> tag from pyproject.toml to origin
   doctor  Check Python, runtime dependencies, and WebView2
+  changelog  Generate CHANGELOG.md from Git commits
   --help   Show this help
 '@
     exit 0
@@ -112,6 +113,15 @@ try {
                 }
                 default { throw "Modo local desconocido: $mode. Usa py o exe." }
             }
+        }
+        'changelog' {
+            $changelogArgs = if ($args.Count -gt 1) {
+                $args[1..($args.Count - 1)]
+            } else {
+                '--output', 'CHANGELOG.md'
+            }
+            uv run --locked --no-sync --python 3.13 python scripts/changelog.py @changelogArgs
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
         }
         'doctor' { Invoke-Doctor }
         'build' { Build-Executable }

@@ -16,6 +16,7 @@ Commands:
   version  Print the version from pyproject.toml
   publish  Push the v<version> tag from pyproject.toml to origin
   doctor  Check Python, runtime dependencies, and WebView2
+  changelog  Generate CHANGELOG.md from Git commits
   --help   Show this help
 EOF
 )
@@ -41,6 +42,14 @@ cmd_local() {
     printf '%s\n' 'Abriendo Whisper Desktop...' >&2
     uv run --locked --python 3.13 --no-dev app.py
 }
+
+cmd_changelog() {
+    if [ "$#" -eq 0 ]; then
+        set -- --output CHANGELOG.md
+    fi
+    uv run --locked --no-sync --python 3.13 python scripts/changelog.py "$@"
+}
+
 
 cmd_doctor() {
     if ! command -v uv >/dev/null 2>&1; then

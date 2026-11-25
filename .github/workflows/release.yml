@@ -33,7 +33,7 @@ jobs:
       - name: Generate changelog and release notes
         shell: bash
         run: |
-          uv run --locked --no-sync --python 3.13 python scripts/changelog.py \
+          sh run.sh changelog \
             --tag "$GITHUB_REF_NAME" --output dist/CHANGELOG.md --release-notes build/release-notes.md
       - name: Publish GitHub Release
         shell: bash
