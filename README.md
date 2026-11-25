@@ -19,6 +19,16 @@ La ventana usa Microsoft Edge WebView2. Si Windows no lo tiene instalado, instal
 
 Para transcribir en lote, selecciona varios archivos, elige **SRT**, **JSON** o **SRT y JSON**, y pulsa **Transcribir lote…**. Elige la carpeta de destino. Los archivos se guardan conforme termina cada transcripción. La cola muestra los resultados y continúa si un archivo falla.
 
+## Transcribir desde la terminal
+
+Desde la raíz del proyecto:
+
+    sh run.sh transcribe "grabacion.mkv" --language es --format both
+    .\run.ps1 transcribe "grabacion.mkv" --language es --format both
+
+Por defecto genera un SRT junto al archivo original. Usa `--output-dir` para elegir otra carpeta. El comando escribe un objeto JSON en stdout con el idioma, la cantidad de segmentos y las rutas generadas. Los mensajes de estado y los errores salen por stderr. Si no detecta voz, devuelve una lista de salidas vacía.
+
+
 ## Desarrollo y publicación
 
 Desde PowerShell en Windows, en la raíz del proyecto:

@@ -7,6 +7,7 @@ const statusText = document.querySelector('#status');
 const progress = document.querySelector('#progress');
 const appVersion = document.querySelector('#app-version');
 let api;
+const dropZone = document.querySelector('#drop-zone');
 const fileCount = document.querySelector('#filename');
 const queue = document.querySelector('#queue');
 const format = document.querySelector('#format');
@@ -27,6 +28,7 @@ function updateButtons() {
   start.textContent = batch ? 'Transcribir lote…' : 'Transcribir';
   save.hidden = batch;
   formatField.hidden = !batch;
+  formatField.parentElement.classList.toggle('has-batch', batch);
   format.disabled = locked;
   metal.disabled = locked || metalField.hidden;
   save.disabled = locked || phase !== 'done';
@@ -51,6 +53,36 @@ function renderQueue(results) {
     return item;
   }));
 }
+
+function setSelection(selected) {
+  files = selected;
+  renderedResults = -1;
+  fileCount.textContent = files.length > 1 ? files.length + ' archivos seleccionados' : files[0];
+  fileCount.title = files.length === 1 ? files[0] : '';
+}
+
+function refreshSelection() {
+  return run(async () => {
+    const state = await api.status();
+    if (state.files.length) setSelection(state.files);
+    render(state);
+  });
+}
+
+document.addEventListener('dragover', (event) => {
+  event.preventDefault();
+  const acceptsFiles = !choose.disabled && dropZone.contains(event.target) &&
+    Array.from(event.dataTransfer.types).includes('Files');
+  event.dataTransfer.dropEffect = acceptsFiles ? 'copy' : 'none';
+  dropZone.classList.toggle('is-dragging', acceptsFiles);
+});
+dropZone.addEventListener('dragleave', (event) => {
+  if (!dropZone.contains(event.relatedTarget)) dropZone.classList.remove('is-dragging');
+});
+document.addEventListener('drop', (event) => {
+  event.preventDefault();
+  dropZone.classList.remove('is-dragging');
+});
 
 function render(state) {
   renderQueue(state.results ?? []);
@@ -93,13 +125,15 @@ async function poll() {
 
 window.addEventListener('pywebviewready', () => {
   api = window.pywebview.api;
-  run(async () => render(await api.status()));
+  refreshSelection();
+  window.addEventListener('whisper-files-selected', refreshSelection);
+  window.addEventListener('whisper-files-unavailable', () => {
+    if (!choose.disabled) showMessage('No se pudo leer el archivo arrastrado. Usa Elegir archivos.', true);
+  });
   choose.addEventListener('click', () => run(async () => {
     const selected = await api.choose_files();
     if (selected) {
-      files = selected;
-      renderedResults = -1;
-      fileCount.textContent = files.length > 1 ? files.length + ' archivos seleccionados' : files[0];
+      setSelection(selected);
       render(await api.status());
     }
   }));

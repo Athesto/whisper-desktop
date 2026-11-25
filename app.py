@@ -1,3 +1,4 @@
+import argparse
 import json
 import platform
 import sys
@@ -5,6 +6,12 @@ import tomllib
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from threading import Lock, Thread
+
+
+MODELS = ("tiny", "base", "small")
+LANGUAGES = ("auto", "es", "en", "pt", "fr")
+FORMATS = {"srt": ("srt",), "json": ("json",), "both": ("srt", "json")}
+
 
 
 def timestamp(seconds):
@@ -74,6 +81,41 @@ def metal_available():
 
 
 
+def load_model(name, device):
+    from faster_whisper import WhisperModel
+
+    compute_type = "float16" if device == "mps" else "int8"
+    return WhisperModel(name, device=device, compute_type=compute_type)
+
+
+def write_subtitles(path, source, model, language, subtitles):
+    if path.suffix == ".srt":
+        content = format_srt(subtitles)
+    else:
+        content = json.dumps(
+            {
+                "source": source.name, "model": model, "language": language,
+                "segments": [{"start": a, "end": b, "text": line} for a, b, line in subtitles],
+            },
+            ensure_ascii=False, indent=2,
+        ) + "\n"
+    write_text(path, content, replace=False)
+
+
+
+def read_segments(model, source, language, on_progress):
+    segments, info = model.transcribe(
+        str(source), language=None if language == "auto" else language, vad_filter=True,
+    )
+    subtitles = []
+    for segment in segments:
+        line = " ".join(segment.text.split())
+        if line:
+            subtitles.append((segment.start, segment.end, line))
+        ratio = min(1, segment.end / info.duration) if info.duration > 0 else 0
+        on_progress(len(subtitles), ratio)
+    return subtitles, info.language
+
 class Desktop:
     def __init__(self, webview):
         self._webview = webview
@@ -102,7 +144,9 @@ class Desktop:
                 "Todos los archivos (*.*)",
             ),
         )
-        paths = dialog_paths(selection)
+        return self._select_files(dialog_paths(selection))
+
+    def _select_files(self, paths):
         if not paths:
             return None
         with self._lock:
@@ -115,21 +159,38 @@ class Desktop:
             self._state = {"phase": "idle", "message": "Listo para transcribir.", "progress": 0}
             return [path.name for path in paths]
 
+    def _on_file_drop(self, event):
+        entries = (event.get("dataTransfer") or {}).get("files", [])
+        dropped = dialog_paths(
+            [item["pywebviewFullPath"] for item in entries if item.get("pywebviewFullPath")]
+        )
+        paths = []
+        for path in dropped:
+            try:
+                if path.is_file():
+                    paths.append(path)
+            except OSError:
+                continue
+        if self._select_files(tuple(paths)):
+            self._window.run_js("window.dispatchEvent(new Event('whisper-files-selected'))")
+        elif not paths:
+            self._window.run_js("window.dispatchEvent(new Event('whisper-files-unavailable'))")
+
     def status(self):
         with self._lock:
             return {
                 **self._state, "version": self._version, "results": self._results.copy(),
                 "metal_available": self._metal_available, "device": self._device,
+                "files": [path.name for path in self._sources],
             }
 
     def start(self, model, language, output_format="srt", use_metal=False):
-        if model not in ("tiny", "base", "small") or language not in ("auto", "es", "en", "pt", "fr"):
+        if model not in MODELS or language not in LANGUAGES:
             raise ValueError("Modelo o idioma inválido.")
         if use_metal and not self._metal_available:
             raise ValueError("Metal no está disponible en este equipo.")
         device = "mps" if use_metal else "cpu"
-        formats = {"srt": ("srt",), "json": ("json",), "both": ("srt", "json")}
-        if output_format not in formats:
+        if output_format not in FORMATS:
             raise ValueError("Formato de salida inválido.")
         with self._lock:
             sources = self._sources
@@ -154,34 +215,18 @@ class Desktop:
             self._device = device
             self._state = {"phase": "running", "message": "Cargando modelo de Whisper…", "progress": None}
             Thread(
-                target=self._transcribe, args=(sources, model, language, directory, formats[output_format], device),
+                target=self._transcribe, args=(sources, model, language, directory, FORMATS[output_format], device),
                 daemon=True,
             ).start()
             return True
-
-    def _read_segments(self, source, language, on_progress):
-        segments, info = self._model.transcribe(
-            str(source), language=None if language == "auto" else language, vad_filter=True,
-        )
-        subtitles = []
-        for segment in segments:
-            line = " ".join(segment.text.split())
-            if line:
-                subtitles.append((segment.start, segment.end, line))
-            ratio = min(1, segment.end / info.duration) if info.duration > 0 else 0
-            on_progress(len(subtitles), ratio)
-        return subtitles, info.language
 
     def _transcribe(self, sources, model, language, directory, formats, device):
         try:
             model_key = (model, device)
             if self._model_key != model_key:
-                from faster_whisper import WhisperModel
-
                 self._model = None
                 self._model_key = None
-                compute_type = "float16" if device == "mps" else "int8"
-                self._model = WhisperModel(model, device=device, compute_type=compute_type)
+                self._model = load_model(model, device)
                 self._model_key = model_key
 
             if directory is None:
@@ -204,7 +249,7 @@ class Desktop:
                 self._state["message"] = f"Transcribiendo · {count} segmentos"
                 self._state["progress"] = min(99, round(100 * ratio))
 
-        subtitles, detected_language = self._read_segments(source, language, progress)
+        subtitles, detected_language = read_segments(self._model, source, language, progress)
         with self._lock:
             self._subtitles = subtitles
             self._state = {
@@ -234,20 +279,10 @@ class Desktop:
 
             saved = []
             try:
-                subtitles, detected_language = self._read_segments(source, language, progress)
+                subtitles, detected_language = read_segments(self._model, source, language, progress)
                 if subtitles:
                     for path in batch_destinations(directory, source, formats):
-                        if path.suffix == ".srt":
-                            content = format_srt(subtitles)
-                        else:
-                            content = json.dumps(
-                                {
-                                    "source": source.name, "model": model, "language": detected_language,
-                                    "segments": [{"start": a, "end": b, "text": line} for a, b, line in subtitles],
-                                },
-                                ensure_ascii=False, indent=2,
-                            ) + "\n"
-                        write_text(path, content, replace=False)
+                        write_subtitles(path, source, model, detected_language, subtitles)
                         saved.append(path.name)
                     exported += 1
                 result = {"name": source.name, "message": ", ".join(saved) or "Sin voz detectada", "error": False}
@@ -302,15 +337,60 @@ class Desktop:
         return {"name": path.name}
 
 
+def transcribe_cli(arguments):
+    parser = argparse.ArgumentParser(description="Transcribe un video o audio sin abrir la ventana.")
+    parser.add_argument("source", type=Path, help="Archivo de video o audio.")
+    parser.add_argument("--model", choices=MODELS, default="base")
+    parser.add_argument("--language", choices=LANGUAGES, default="auto")
+    parser.add_argument("--format", choices=FORMATS, default="srt")
+    parser.add_argument("--output-dir", type=Path, help="Carpeta de destino; por defecto, la del archivo.")
+    parser.add_argument("--device", choices=("cpu", "mps"), default="cpu")
+    args = parser.parse_args(arguments)
+
+    source = args.source.resolve()
+    if not source.is_file():
+        parser.error(f"No se encontró el archivo: {source}")
+    if args.device == "mps" and not metal_available():
+        parser.error("Metal no está disponible en este equipo.")
+
+    try:
+        directory = args.output_dir.resolve() if args.output_dir else source.parent
+        directory.mkdir(parents=True, exist_ok=True)
+        print(f"Transcribiendo {source.name} con {args.model} ({args.device})…", file=sys.stderr)
+        model = load_model(args.model, args.device)
+        subtitles, detected_language = read_segments(model, source, args.language, lambda *_: None)
+        outputs = []
+        if subtitles:
+            for path in batch_destinations(directory, source, FORMATS[args.format]):
+                write_subtitles(path, source, args.model, detected_language, subtitles)
+                outputs.append(str(path))
+    except (OSError, RuntimeError, ValueError) as error:
+        print(f"No se pudo generar los subtítulos: {error}", file=sys.stderr)
+        return 1
+
+    print(json.dumps({
+        "source": str(source), "language": detected_language, "segments": len(subtitles), "outputs": outputs,
+    }))
+    return 0
+
+
+
 def main():
     import webview
+    from webview.dom import DOMEventHandler
 
     desktop = Desktop(webview)
     desktop._window = webview.create_window(
         "Whisper · Subtítulos", url=str(Path(__file__).with_name("index.html").resolve()),
-        js_api=desktop, width=820, height=730, resizable=False, zoomable=False,
+        js_api=desktop, width=880, height=870, resizable=False, zoomable=False,
         background_color="#111318", confirm_close=True,
     )
+
+    def bind_drop():
+        zone = desktop._window.dom.get_element("#drop-zone")
+        zone.events.drop += DOMEventHandler(desktop._on_file_drop, prevent_default=True)
+
+    desktop._window.events.loaded += bind_drop
     webview.start(icon=str(Path(__file__).with_name("assets") / "whisper.ico"))
 
 
@@ -320,4 +400,6 @@ if __name__ == "__main__":
 
         check_bundle()
         sys.exit(0)
+    if sys.argv[1:2] == ["transcribe"]:
+        sys.exit(transcribe_cli(sys.argv[2:]))
     main()

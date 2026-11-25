@@ -8,8 +8,8 @@
     :root { color-scheme: dark; font: 16px/1.5 "Segoe UI", sans-serif; color: #f1f2f6; background: #111318; }
     * { box-sizing: border-box; }
     body { margin: 0; }
-    main { max-width: 730px; padding: 42px 30px; margin: auto; }
-    header { margin-bottom: 30px; }
+    main { display: flex; flex-direction: column; min-height: 100vh; max-width: 790px; padding: 22px 30px; margin: auto; }
+    header { margin-bottom: 20px; }
     .brand { display: inline-flex; align-items: center; gap: 9px; }
     .brand img { width: 28px; height: 28px; }
     .brand strong { color: #b6b0ff; font-size: .85rem; letter-spacing: .12em; text-transform: uppercase; }
@@ -17,9 +17,13 @@
     p { margin: 0; color: #b2b6c5; }
     .panel { background: #1a1d25; border: 1px solid #303442; border-radius: 18px; padding: 24px; }
     .file, .actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-    .file { padding-bottom: 22px; border-bottom: 1px solid #303442; }
-    #filename { display: block; overflow-wrap: anywhere; max-width: 360px; }
+    .file { border: 1px dashed #505469; border-radius: 11px; padding: 14px; }
+    .file.is-dragging { border-color: #bdb7ff; background: #29263d; }
+    .file-copy { flex: 1 1 240px; min-width: 0; }
+    #drop-hint { font-size: .85rem; }
+    #filename { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
+    @media (min-width: 690px) { .fields.has-batch { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, .8fr); } }
     label { display: grid; gap: 6px; font-weight: 600; }
     select, button { font: inherit; border: 1px solid #424757; border-radius: 9px; padding: 9px 13px; }
     select { width: 100%; background: #15171e; }
@@ -28,7 +32,7 @@
     button:hover:enabled { filter: brightness(1.13); }
     button:disabled, select:disabled { opacity: .48; cursor: default; }
     :focus-visible { outline: 2px solid #d5d1ff; outline-offset: 3px; }
-    .queue { max-height: 138px; overflow: auto; margin: 10px 0 0; padding-left: 22px; color: #b2b6c5; overflow-wrap: anywhere; }
+    .queue { max-height: 96px; overflow: auto; margin: 10px 0 0; padding-left: 22px; color: #b2b6c5; overflow-wrap: anywhere; }
     .queue li { padding: 3px 0; }
     .queue li[data-error="true"] { color: #ffb4ae; }
     .metal { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -39,7 +43,7 @@
     [hidden] { display: none; }
     #status { overflow-wrap: anywhere; }
     #status[data-error="true"] { color: #ffb4ae; }
-    footer { display: grid; gap: 6px; margin-top: 16px; font-size: .85rem; }
+    footer { display: grid; gap: 6px; margin-top: auto; padding-top: 16px; font-size: .85rem; }
     .footer-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; color: #b2b6c5; }
     .footer-meta a { color: #b6b0ff; }
     #app-version { margin-left: auto; white-space: nowrap; }
@@ -53,8 +57,12 @@
       <p>Transcribe un archivo o procesa varios en lote con Whisper.</p>
     </header>
     <section class="panel" aria-label="Transcripción">
-      <div class="file">
-        <div><strong>Archivos</strong><p id="filename">Ningún archivo seleccionado</p></div>
+      <div class="file" id="drop-zone" aria-describedby="drop-hint">
+        <div class="file-copy">
+          <strong>Archivos</strong>
+          <p id="filename">Ningún archivo seleccionado</p>
+          <p id="drop-hint">Arrastra y suelta videos o audios aquí.</p>
+        </div>
         <button id="choose" disabled>Elegir archivos</button>
       </div>
       <ul class="queue" id="queue" aria-label="Archivos del lote" hidden></ul>

@@ -12,6 +12,7 @@ Usage: ./${PROGRAM} [command]
 
 Commands:
   local    Run the desktop app from source
+  transcribe  Generate subtitles from a file without opening the app
   build    Build dist/Whisper-Desktop.exe on Windows
   version  Print the version from pyproject.toml
   publish  Push the v<version> tag from pyproject.toml to origin
@@ -42,6 +43,11 @@ cmd_local() {
     printf '%s\n' 'Abriendo Whisper Desktop...' >&2
     uv run --locked --python 3.13 --no-dev app.py
 }
+
+cmd_transcribe() {
+    uv run --locked --python 3.13 --no-dev app.py transcribe "$@"
+}
+
 
 cmd_changelog() {
     if [ "$#" -eq 0 ]; then

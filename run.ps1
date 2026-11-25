@@ -80,6 +80,7 @@ Usage: .\run.ps1 [command]
 
 Commands:
   local [py|exe]  Run from Python (default) or open the built executable
+  transcribe     Generate subtitles from a file without opening the app
   build    Build dist/Whisper-Desktop.exe on Windows
   version  Print the version from pyproject.toml
   publish  Push the v<version> tag from pyproject.toml to origin
@@ -124,6 +125,11 @@ try {
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
         }
         'doctor' { Invoke-Doctor }
+        'transcribe' {
+            $transcribeArgs = @($args | Select-Object -Skip 1)
+            uv run --locked --python 3.13 --no-dev app.py transcribe @transcribeArgs
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+        }
         'build' { Build-Executable }
         'version' { Get-ProjectVersion }
         'publish' { Publish-ReleaseTag }
