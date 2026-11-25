@@ -75,7 +75,7 @@ def main():
     print(f"[OK] Python {sys.version.split()[0]} ({sys.executable})", flush=True)
     print("[OK] Git disponible para publish" if shutil.which("git") else "[INFO] Git solo es necesario para publish")
     webview_ok = check_webview2()
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     runtime_ok = check_runtime(uv, root)
     build_ok = check_build(uv, root)
     return 0 if webview_ok and runtime_ok and build_ok else 1

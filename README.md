@@ -43,3 +43,11 @@ También puedes usar sh run.sh desde Git Bash.
 - doctor comprueba uv, Python 3.13, WebView2 y las dependencias de ejecución. También prueba la decodificación y el detector de voz sin conexión. No instala dependencias ni descarga modelos.
 - build genera dist/Whisper-Desktop.exe con Python y las dependencias incluidas. El equipo que lo ejecuta necesita Microsoft Edge WebView2 y conexión a internet para la primera descarga de cada modelo.
 - publish requiere un repositorio GitHub configurado como origin. Actualiza project.version en pyproject.toml, sincroniza uv.lock con uv lock y haz commit de los cambios. El comando sube el tag v<versión> del commit actual. GitHub Actions compila en Windows, prueba el ejecutable y lo adjunta al Release.
+
+## Registro de cambios
+
+Cada tag de versión genera las notas del Release a partir de sus commits y adjunta el historial completo como CHANGELOG.md. Para previsualizar el historial, incluidos los cambios sin publicar:
+
+    uv run --no-sync --python 3.13 python scripts/changelog.py
+
+Los mensajes feat: y fix: se agrupan en Añadido y Corregido. Los commits internos con prefijos como ci: o chore: aparecen en los detalles del Release.

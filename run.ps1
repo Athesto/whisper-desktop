@@ -21,7 +21,7 @@ function Invoke-Doctor {
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
     $python = uv python find --no-project --no-python-downloads 3.13
     if ($LASTEXITCODE) { throw 'Falta Python 3.13. Instálalo con uv python install 3.13.' }
-    & $python -u doctor.py
+    & $python -u scripts/doctor.py
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
 }
 

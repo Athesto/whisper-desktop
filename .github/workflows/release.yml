@@ -13,6 +13,8 @@ jobs:
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: Validate tag and build
         shell: bash
@@ -28,13 +30,20 @@ jobs:
         run: |
           $result = Start-Process -FilePath .\dist\Whisper-Desktop.exe -ArgumentList '--smoke-test' -Wait -PassThru
           exit $result.ExitCode
-      - name: Upload executable to GitHub Release
+      - name: Generate changelog and release notes
+        shell: bash
+        run: |
+          uv run --locked --no-sync --python 3.13 python scripts/changelog.py \
+            --tag "$GITHUB_REF_NAME" --output dist/CHANGELOG.md --release-notes build/release-notes.md
+      - name: Publish GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/Whisper-Desktop.exe --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes-file build/release-notes.md
+            gh release upload "$GITHUB_REF_NAME" dist/Whisper-Desktop.exe dist/CHANGELOG.md --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/Whisper-Desktop.exe --verify-tag --generate-notes
+            gh release create "$GITHUB_REF_NAME" dist/Whisper-Desktop.exe dist/CHANGELOG.md \
+              --verify-tag --notes-file build/release-notes.md
           fi

@@ -52,7 +52,7 @@ cmd_doctor() {
         printf '%s\n' '[ERROR] Falta Python 3.13. Instálalo con uv python install 3.13.' >&2
         return 1
     fi
-    "$doctor_python" -u doctor.py
+    "$doctor_python" -u scripts/doctor.py
 }
 
 
