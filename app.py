@@ -353,12 +353,27 @@ def transcribe_cli(arguments):
     if args.device == "mps" and not metal_available():
         parser.error("Metal no está disponible en este equipo.")
 
+    terminal = sys.stderr.isatty()
+    last_percent = -1
+
+    def progress(_, ratio):
+        nonlocal last_percent
+        percent = max(0, min(99, int(ratio * 100)))
+        if not terminal:
+            percent = percent // 10 * 10
+        if percent <= last_percent:
+            return
+        last_percent = percent
+        print(f"Progreso: {percent:3d}%", file=sys.stderr, end="\r" if terminal else "\n", flush=True)
+
+
     try:
         directory = args.output_dir.resolve() if args.output_dir else source.parent
         directory.mkdir(parents=True, exist_ok=True)
         print(f"Transcribiendo {source.name} con {args.model} ({args.device})…", file=sys.stderr)
         model = load_model(args.model, args.device)
-        subtitles, detected_language = read_segments(model, source, args.language, lambda *_: None)
+        progress(0, 0)
+        subtitles, detected_language = read_segments(model, source, args.language, progress)
         outputs = []
         if subtitles:
             for path in batch_destinations(directory, source, FORMATS[args.format]):
@@ -368,6 +383,7 @@ def transcribe_cli(arguments):
         print(f"No se pudo generar los subtítulos: {error}", file=sys.stderr)
         return 1
 
+    print("Progreso: 100%", file=sys.stderr, flush=True)
     print(json.dumps({
         "source": str(source), "language": detected_language, "segments": len(subtitles), "outputs": outputs,
     }))
